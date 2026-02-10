@@ -1,6 +1,4 @@
 import { createContext, useState } from 'react';
-import { MainPage } from './MainPage';
-import { BloodDashboard } from './BloodDashboard';
 import { Link } from 'react-router-dom';
 
 const BaseURL = import.meta.env.VITE_API_BASE;

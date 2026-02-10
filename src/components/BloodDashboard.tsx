@@ -8,7 +8,6 @@ export const BloodDashboard = () => {
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [requestId, setRequestId] = useState('');
   const donorId = localStorage.getItem('userId') ;
 
   useEffect(() => {
@@ -29,11 +28,11 @@ export const BloodDashboard = () => {
   function AddToQueue(requestId: string) {
     console.log("DonorID:",donorId);
     axios.post(`${API_BASE}/${donorId}/acceptedRequests`, { requestId })
-      .then(res => {  
+      .then(() => {
         alert('Added to queue successfully!');
         fetchRequests(); // Refresh the list of requests
       })
-      .catch(err => {
+      .catch(() => {
         setError('Failed to add to queue');
       });
   }
@@ -95,7 +94,7 @@ export const BloodDashboard = () => {
           <div className="mb-2 text-sm text-gray-700">Found {requests.filter(r => r.bloodGroup === bloodGroup).length} matching request(s)</div>
           <div className="space-y-3">
             {requests.filter(r => r.bloodGroup === bloodGroup).map((r: any, idx: number) => (
-              <div key={idx} onClick={() => { AddToQueue(r._id); setRequestId(r._id); }} className="p-4 border rounded-lg shadow-sm bg-white  hover:bg-red-200 ">
+              <div key={idx} onClick={() => { AddToQueue(r._id); }} className="p-4 border rounded-lg shadow-sm bg-white  hover:bg-red-200 ">
                 <div className="flex justify-between items-start">
                   <div>
                     <div className="font-semibold">{r.patientName || 'Unknown Patient'}</div>
