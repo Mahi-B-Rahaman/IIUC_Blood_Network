@@ -8,7 +8,6 @@ export const BloodDashboard = () => {
   const [gender, setGender] = useState('');
   const [donorPhone, setDonorPhone] = useState('');
   const [requests, setRequests] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showUpdateForm, setShowUpdateForm] = useState(false);
   
@@ -27,7 +26,6 @@ export const BloodDashboard = () => {
   function AddToQueue(requestId: string) {
     if (!donorId) return alert("Please login to accept requests");
     
-    setLoading(true);
     // Note: Adjusted the URL to a more standard structure: /api/donors/:id/accept
     axios.post(`${API_BASE}/donors/${donorId}/accept`, { requestId })
       .then(() => {
@@ -36,12 +34,10 @@ export const BloodDashboard = () => {
       })
       .catch((err) => {
         setError(err.response?.data?.error || 'Failed to add to queue');
-      })
-      .finally(() => setLoading(false));
+      });
   }
 
   const fetchDonorAndRequests = async (id: string) => {
-    setLoading(true);
     setError('');
     try {
       const [donorRes, requestsRes] = await Promise.all([
@@ -65,8 +61,6 @@ export const BloodDashboard = () => {
       setRequests(requestsRes.data || []);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to load dashboard data');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -82,15 +76,12 @@ export const BloodDashboard = () => {
   const updateDonorProfile = async (e: any) => {
     e.preventDefault();
     if (!donorId) return;
-    setLoading(true);
     try {
       await axios.put(`${API_BASE}/donors/${donorId}`, { bloodGroup, gender });
       setShowUpdateForm(false);
       fetchDonorAndRequests(donorId);
     } catch (err: any) {
       setError('Update failed');
-    } finally {
-      setLoading(false);
     }
   };
 
