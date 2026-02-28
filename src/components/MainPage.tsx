@@ -7,7 +7,7 @@ export const MainPage = () => {
   
   return (
     <>
-    <h1>Welcome {UserID}</h1>
+    <h1 className='bg-black'>Welcome {UserID}</h1>
     <Link to="/blooddashboard">Go to Dashboard</Link>
     </>
   )

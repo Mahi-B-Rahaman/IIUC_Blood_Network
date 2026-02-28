@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { motion } from 'framer-motion';
 
-const API_BASE = import.meta.env.VITE_API_BASE ;
+const API_BASE = import.meta.env.VITE_API_BASE;
 
 export const BloodRequest = () => {
   const [formData, setFormData] = useState({
@@ -21,18 +21,15 @@ export const BloodRequest = () => {
   const [cancelLoading, setCancelLoading] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
 
-  // If user is logged in, prefill phone and check existing requests
   useEffect(() => {
     const userId = localStorage.getItem('userId');
     if (!userId) return;
 
-    // fetch donor profile to get phone, then find any active request for that phone
     axios.get(`${API_BASE}/donors/${userId}`)
       .then(res => {
         const phone = res.data?.phone;
         if (phone) {
           setFormData(prev => ({ ...prev, phone }));
-          // fetch requests and pick the most recent active one for this phone
           return axios.get(`${API_BASE}/requests`)
             .then(reqRes => {
               const requests = reqRes.data || [];
@@ -47,12 +44,9 @@ export const BloodRequest = () => {
             });
         }
       })
-      .catch(() => {
-        // ignore errors silently
-      });
+      .catch(() => {});
   }, []);
 
-  // Regex for Bangladeshi phone numbers (01 followed by 9 digits)
   const bdPhoneRegex = /^(?:\+88|88)?(01[3-9]\d{8})$/;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -63,204 +57,196 @@ export const BloodRequest = () => {
     e.preventDefault();
     setStatus({ message: '', isError: false });
 
-    // Prevent multiple active requests for same logged-in user
     const userId = localStorage.getItem('userId');
     if (userId && hasActiveRequest) {
-      setStatus({ message: 'You already have an active request. Please cancel it before creating a new one.', isError: true });
+      setStatus({ message: 'Active request found. Please cancel it before creating a new one.', isError: true });
       return;
     }
 
-    // Validate Bangladeshi Phone Format
     if (!bdPhoneRegex.test(formData.phone)) {
-      setStatus({ message: 'Please enter a valid Bangladeshi phone number (01XXXXXXXXX).', isError: true });
+      setStatus({ message: 'Enter a valid Bangladeshi phone number.', isError: true });
       return;
     }
 
     try {
       const response = await axios.post(`${API_BASE}/requests`, formData);
       if (response.status === 201) {
-        // Access the generated B-XXXXXX ID from the backend
         const generatedId = response.data.requestId;
-        setStatus({ 
-          message: `Urgent Request Created! Reference ID: ${generatedId}`, 
-          isError: false 
-        });
-        // Mark that this user now has an active request
-        // Refresh requests and set the activeRequest to the newly created one
-        try {
-          const reqRes = await axios.get(`${API_BASE}/requests`);
-          const requests = reqRes.data || [];
-          const phone = formData.phone?.toString();
-          const existing = requests.find((r: any) => (r.phone || '').toString() === phone);
-          if (existing) {
-            setHasActiveRequest(true);
-            setActiveRequest(existing);
-          }
-        } catch {
-          // ignore
+        setStatus({ message: `Success! Reference ID: ${generatedId}`, isError: false });
+        
+        // Refresh state
+        const reqRes = await axios.get(`${API_BASE}/requests`);
+        const existing = (reqRes.data || []).find((r: any) => (r.phone || '').toString() === formData.phone.toString());
+        if (existing) {
+          setHasActiveRequest(true);
+          setActiveRequest(existing);
         }
-        // Clear form after success
+
         setFormData({
-            patientName: '', phone: '', location: '', reason: '', 
-            bloodGroup: '', donationTime: '',
-            donationDate: new Date().toISOString().split('T')[0]
+          patientName: '', phone: formData.phone, location: '', reason: '', 
+          bloodGroup: '', donationTime: '',
+          donationDate: new Date().toISOString().split('T')[0]
         });
       }
     } catch (err: any) {
-      setStatus({ 
-        message: err.response?.data?.error || 'Failed to submit request. Please try again.', 
-        isError: true 
-      });
+      setStatus({ message: err.response?.data?.error || 'Submission failed.', isError: true });
     }
   };
 
   const getProgressPercent = (r: any) => {
     if (!r) return 0;
-    if (typeof r.progress === 'number') return Math.min(100, Math.max(0, r.progress));
-    const s = (r.status || r.stage || '').toString().toLowerCase();
-    if (s.includes('completed') || s.includes('done')) return 100;
-    if (s.includes('accepted') || s.includes('confirmed')) return 75;
-    if (s.includes('cancel')) return 0;
-    return 25; // pending/created
-  };
-
-  const openCancelModal = () => {
-    if (!activeRequest) return;
-    setShowCancelModal(true);
+    const s = (r.status || '').toLowerCase();
+    if (s.includes('done')) return 100;
+    if (s.includes('accept')) return 75;
+    return 25;
   };
 
   const performCancel = async () => {
     if (!activeRequest) return;
     const id = activeRequest._id || activeRequest.requestId;
-    if (!id) return setStatus({ message: 'Cannot cancel - invalid request id', isError: true });
-
     setCancelLoading(true);
     try {
       await axios.delete(`${API_BASE}/requests/${id}`);
-      setStatus({ message: 'Request cancelled successfully', isError: false });
       setHasActiveRequest(false);
       setActiveRequest(null);
       setShowCancelModal(false);
+      setStatus({ message: 'Request removed.', isError: false });
     } catch (err: any) {
-      setStatus({ message: err.response?.data?.error || 'Failed to cancel request', isError: true });
+      setStatus({ message: 'Cancel failed.', isError: true });
     } finally {
       setCancelLoading(false);
     }
   };
 
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="max-w-md mx-auto mt-10 p-8 bg-white rounded-2xl shadow-2xl border border-red-50"
-    >
-      <div className="text-center mb-8">
-        <h2 className="text-3xl font-extrabold text-red-600">Blood Emergency</h2>
-        <p className="text-gray-500 text-sm mt-1">Fill out the details for a new request</p>
-      </div>
-      
-      {status.message && (
-        <motion.div 
-          initial={{ scale: 0.9 }}
-          animate={{ scale: 1 }}
-          className={`p-4 mb-6 rounded-lg text-sm font-medium text-center ${
-            status.isError ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'
-          }`}
-        >
-          {status.message}
-        </motion.div>
-      )}
+    <div className="min-h-screen bg-[#fcfcfc] font-sans text-slate-900 pb-20 mt-20">
+      <div className="max-w-2xl mx-auto px-6 pt-12">
+        
+        {/* Header Area */}
+        <div className="mb-12">
+          <h1 className="text-4xl font-black tracking-tight text-slate-900">
+            Request <span className="text-red-600">.</span>
+          </h1>
+          <p className="text-slate-400 font-medium mt-1">Broadcast an emergency to all matching donors</p>
+        </div>
 
-      {activeRequest && (
-        <div className="mb-6 p-4 rounded-xl bg-gray-50 border border-gray-100">
-          <h3 className="text-sm font-semibold text-gray-800 mb-2">Active Request</h3>
-          <div className="text-xs text-gray-600 mb-2">Ref: {activeRequest.requestId || activeRequest._id || 'N/A'}</div>
-          <div className="grid grid-cols-2 gap-2 text-sm text-gray-700 mb-3">
-            <div><strong>Patient:</strong> {activeRequest.patientName || '-'}</div>
-            <div><strong>Group:</strong> {activeRequest.bloodGroup || '-'}</div>
-            <div><strong>Hospital:</strong> {activeRequest.location || '-'}</div>
-            <div><strong>When:</strong> {activeRequest.donationDate || '-'} {activeRequest.donationTime || ''}</div>
+        {status.message && (
+          <div className={`mb-8 p-4 rounded-2xl text-sm font-bold flex items-center gap-3 border ${
+            status.isError ? 'bg-red-50 border-red-100 text-red-600' : 'bg-green-50 border-green-100 text-green-700'
+          }`}>
+            <div className={`w-2 h-2 rounded-full ${status.isError ? 'bg-red-600 animate-pulse' : 'bg-green-600'}`}></div>
+            {status.message}
           </div>
-          <div className="mb-3">
-            <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-              <div className="h-3 bg-red-600 rounded-full" style={{ width: `${getProgressPercent(activeRequest)}%` }} />
+        )}
+
+        {/* Active Request Dashboard Component */}
+        {activeRequest && (
+          <div className="mb-12 bg-white border border-slate-100 rounded-[2.5rem] p-8 shadow-sm">
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1">Current Active Posting</p>
+                <h3 className="text-2xl font-black text-slate-900">{activeRequest.patientName}</h3>
+              </div>
+              <div className="bg-red-50 text-red-600 px-4 py-2 rounded-2xl font-black border border-red-100">
+                {activeRequest.bloodGroup}
+              </div>
             </div>
-            <div className="text-xs text-gray-500 mt-1">Status: {activeRequest.status || (getProgressPercent(activeRequest) === 100 ? 'Completed' : 'Pending')}</div>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={openCancelModal} disabled={cancelLoading} className="px-3 py-2 bg-gray-100 rounded-md text-sm hover:bg-gray-200">
-              {cancelLoading ? 'Cancelling...' : 'Cancel Request'}
+
+            <div className="space-y-4 mb-8">
+              <div className="w-full bg-slate-50 rounded-full h-2 overflow-hidden">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${getProgressPercent(activeRequest)}%` }}
+                  className="h-full bg-red-600 rounded-full" 
+                />
+              </div>
+              <div className="flex justify-between text-[10px] font-black uppercase text-slate-400">
+                <span>Request Sent</span>
+                <span>{getProgressPercent(activeRequest) === 100 ? 'Completed' : 'Donor Searching'}</span>
+              </div>
+            </div>
+
+            <button 
+              onClick={() => setShowCancelModal(true)}
+              className="w-full bg-slate-50 text-slate-400 py-4 rounded-3xl font-black hover:bg-red-50 hover:text-red-600 transition-all"
+            >
+              Cancel This Posting
             </button>
           </div>
-        </div>
-      )}
+        )}
 
-      {showCancelModal && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black bg-opacity-40">
-          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm">
-            <h4 className="text-lg font-semibold mb-2">Cancel Request</h4>
-            <p className="text-sm text-gray-600 mb-4">Are you sure you want to cancel your active blood request? This action cannot be undone.</p>
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setShowCancelModal(false)} className="px-3 py-2 rounded-md bg-gray-100">Close</button>
-              <button onClick={performCancel} disabled={cancelLoading} className="px-3 py-2 rounded-md bg-red-600 text-white">
-                {cancelLoading ? 'Cancelling...' : 'Confirm Cancel'}
-              </button>
+        {/* Form Container */}
+        <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 shadow-sm">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-300 uppercase ml-2 tracking-widest">Patient Name</label>
+              <input name="patientName" value={formData.patientName} required onChange={handleChange} className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-500 font-bold transition-all" placeholder="Full Name" />
             </div>
-          </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-300 uppercase ml-2 tracking-widest">Phone</label>
+                <input name="phone" type="tel" value={formData.phone} required onChange={handleChange} className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-500 font-bold transition-all" placeholder="01XXXXXXXXX" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-300 uppercase ml-2 tracking-widest">Blood Group</label>
+                <select name="bloodGroup" value={formData.bloodGroup} required onChange={handleChange} className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-500 font-bold appearance-none">
+                  <option value="">Select</option>
+                  {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(bg => <option key={bg} value={bg}>{bg}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-300 uppercase ml-2 tracking-widest">Hospital Location</label>
+              <input name="location" value={formData.location} required onChange={handleChange} className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-500 font-bold" placeholder="Hospital Name & Area" />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-300 uppercase ml-2 tracking-widest">Date</label>
+                <input name="donationDate" type="date" required value={formData.donationDate} onChange={handleChange} className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-500 font-bold" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-300 uppercase ml-2 tracking-widest">Time</label>
+                <input name="donationTime" type="time" value={formData.donationTime} required onChange={handleChange} className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-500 font-bold" />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-300 uppercase ml-2 tracking-widest">Emergency Reason</label>
+              <textarea name="reason" value={formData.reason} required onChange={handleChange} className="w-full p-4 bg-slate-50 rounded-2xl h-32 border-none outline-none focus:ring-2 focus:ring-red-500 font-bold resize-none" placeholder="Explain the situation..." />
+            </div>
+
+            <button 
+              type="submit" 
+              className="w-full bg-slate-900 text-white py-5 rounded-3xl font-black hover:bg-red-600 transition-all shadow-xl shadow-slate-100 transform active:scale-[0.98]"
+            >
+              Broadcast Request
+            </button>
+          </form>
+        </div>
+      </div>
+
+      {/* Modern Cancel Modal */}
+      {showCancelModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowCancelModal(false)} />
+          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="relative bg-white p-10 rounded-[2.5rem] shadow-2xl max-w-sm w-full text-center">
+            <div className="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-6">
+              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12"/></svg>
+            </div>
+            <h4 className="text-xl font-black text-slate-900 mb-2">Cancel Posting?</h4>
+            <p className="text-slate-400 font-medium mb-8 text-sm leading-relaxed">This will remove your request from the donor feed immediately.</p>
+            <div className="flex flex-col gap-3">
+              <button onClick={performCancel} disabled={cancelLoading} className="w-full bg-red-600 text-white py-4 rounded-2xl font-black hover:bg-red-700 transition-all">
+                {cancelLoading ? 'Processing...' : 'Yes, Remove It'}
+              </button>
+              <button onClick={() => setShowCancelModal(false)} className="w-full text-slate-400 font-black text-xs uppercase tracking-widest py-2">Keep Posting</button>
+            </div>
+          </motion.div>
         </div>
       )}
-
-      <form onSubmit={handleSubmit} className="space-y-5">
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1">Patient Name*</label>
-          <input name="patientName" value={formData.patientName} required onChange={handleChange} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none transition-all" placeholder="Enter Full Name" />
-        </div>
-        
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1">Phone Number*</label>
-          <input name="phone" type="tel" value={formData.phone} required onChange={handleChange} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none transition-all" placeholder="01XXXXXXXXX" />
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">Blood Group*</label>
-            <select name="bloodGroup" value={formData.bloodGroup} required onChange={handleChange} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none appearance-none">
-              <option value="">Select</option>
-              {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(bg => <option key={bg} value={bg}>{bg}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">Hospital Location*</label>
-            <input name="location" value={formData.location} required onChange={handleChange} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none" placeholder="Hospital Name" />
-          </div>
-        </div>
-        
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">Required Date*</label>
-            <input name="donationDate" type="date" required value={formData.donationDate} onChange={handleChange} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none" />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">Required Time*</label>
-            <input name="donationTime" type="time" value={formData.donationTime} required onChange={handleChange} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none" />
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1">Reason for Emergency*</label>
-          <textarea name="reason" value={formData.reason} required onChange={handleChange} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl h-28 focus:ring-2 focus:ring-red-500 outline-none resize-none" placeholder="Surgery, Accident, etc." />
-        </div>
-
-        <motion.button 
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          type="submit" 
-          className="w-full bg-red-600 text-white font-bold py-4 rounded-xl hover:bg-red-700 transition-colors shadow-lg shadow-red-200"
-        >
-          Submit Urgent Request
-        </motion.button>
-      </form>
-    </motion.div>
+    </div>
   );
 };
-

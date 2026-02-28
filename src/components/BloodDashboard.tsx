@@ -10,177 +10,165 @@ export const BloodDashboard = () => {
   const [requests, setRequests] = useState<any[]>([]);
   const [error, setError] = useState('');
   const [showUpdateForm, setShowUpdateForm] = useState(false);
-  
-  // Get donorId inside the component to ensure it's reactive
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
   const donorId = localStorage.getItem('userId');
 
   useEffect(() => {
     if (donorId) {
       fetchDonorAndRequests(donorId);
     } else {
-      setError('No donor ID found. Please login first.');
+      setError('Session expired. Please login again.');
     }
   }, [donorId]);
 
-  // FIX: Standardize the API endpoint for accepting requests
-  function AddToQueue(requestId: string) {
-    if (!donorId) return alert("Please login to accept requests");
-    
-    // Note: Adjusted the URL to a more standard structure: /api/donors/:id/accept
-    axios.post(`${API_BASE}/donors/${donorId}/accept`, { requestId })
-      .then(() => {
-        alert('You have successfully accepted this request!');
-        fetchRequests(); 
-      })
-      .catch((err) => {
-        setError(err.response?.data?.error || 'Failed to add to queue');
-      });
-  }
-
   const fetchDonorAndRequests = async (id: string) => {
-    setError('');
     try {
       const [donorRes, requestsRes] = await Promise.all([
         axios.get(`${API_BASE}/donors/${id}`),
         axios.get(`${API_BASE}/requests`)
       ]);
-      
-      const bGrp = donorRes.data?.bloodGroup || '';
-      const gen = donorRes.data?.gender || '';
-      const phoneVal = donorRes.data?.phone || '';
-      
-      setBloodGroup(bGrp);
-      setGender(gen);
-      setDonorPhone(phoneVal);
-
-      // Prompt update if profile is incomplete
-      if (!bGrp || !gen) {
-        setShowUpdateForm(true);
-      }
-      
+      setBloodGroup(donorRes.data?.bloodGroup || '');
+      setGender(donorRes.data?.gender || '');
+      setDonorPhone(donorRes.data?.phone || '');
+      if (!donorRes.data?.bloodGroup) setShowUpdateForm(true);
       setRequests(requestsRes.data || []);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to load dashboard data');
+    } catch (err) {
+      setError('Unable to sync with the blood network.');
     }
+  };
+
+  const handleAccept = (requestId: string) => {
+    if (!donorId) return;
+    axios.post(`${API_BASE}/donors/${donorId}/accept`, { requestId })
+      .then(() => {
+        alert('Thank you! You have accepted this request.');
+        fetchRequests();
+      })
+      .catch(() => setError('Failed to process. Check your connection.'));
   };
 
   const fetchRequests = async () => {
+    setIsRefreshing(true);
     try {
       const res = await axios.get(`${API_BASE}/requests`);
       setRequests(res.data || []);
-    } catch (err: any) {
-      setError('Could not refresh requests');
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
-  const updateDonorProfile = async (e: any) => {
-    e.preventDefault();
-    if (!donorId) return;
-    try {
-      await axios.put(`${API_BASE}/donors/${donorId}`, { bloodGroup, gender });
-      setShowUpdateForm(false);
-      fetchDonorAndRequests(donorId);
-    } catch (err: any) {
-      setError('Update failed');
-    }
-  };
-
-  // Helper to format the ISO date from MongoDB into readable text
-  const formatDate = (dateStr: string) => {
-    if (!dateStr) return '-';
-    try {
-      return new Date(dateStr).toLocaleDateString('en-GB');
-    } catch {
-      return dateStr;
-    }
-  };
-
-  // Only show requests that match donor blood group and have a different phone
-  const matchingRequests = requests.filter(r => {
-    const reqPhone = (r.phone || '').toString();
-    return r.bloodGroup === bloodGroup && reqPhone !== donorPhone;
-  });
+  const matchingRequests = requests.filter(r => 
+    r.bloodGroup === bloodGroup && (r.phone || '').toString() !== donorPhone
+  );
 
   return (
-    <div className="p-6 max-w-4xl mx-auto font-sans">
-      <header className="flex justify-between items-center mb-6 border-b pb-4">
-        <h2 className="text-3xl font-extrabold text-red-600">Blood Match Center</h2>
-        {bloodGroup && (
-          <div className="bg-red-100 text-red-700 px-4 py-2 rounded-full font-bold text-lg">
-            My Group: {bloodGroup}
+    <div className="min-h-screen bg-[#fcfcfc] font-sans text-slate-900 pb-20 mt-20">
+      <div className="max-w-2xl mx-auto px-6 pt-12">
+        
+        {/* Simple Integrated Header */}
+        <div className="mb-12 flex justify-between items-end">
+          <div>
+            <h1 className="text-4xl font-black tracking-tight text-slate-900">
+              Matches <span className="text-red-600">.</span>
+            </h1>
+            <p className="text-slate-400 font-medium mt-1">Available emergencies in your area</p>
+          </div>
+          
+          {bloodGroup && (
+            <div className="text-right">
+              <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em] mb-1">Your Type</p>
+              <span className="text-2xl font-black text-red-600 leading-none">{bloodGroup}</span>
+            </div>
+          )}
+        </div>
+
+        {error && (
+          <div className="mb-8 p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-sm font-bold flex items-center gap-3">
+            <span className="w-2 h-2 bg-red-600 rounded-full animate-ping"></span>
+            {error}
           </div>
         )}
-      </header>
 
-      {error && (
-        <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-center border border-red-200">
-          {error}
-        </div>
-      )}
-
-      {showUpdateForm ? (
-        <div className="bg-white shadow-xl border border-yellow-200 p-6 rounded-2xl mb-8">
-           <h3 className="text-lg font-bold text-yellow-700 mb-4">Complete Your Profile</h3>
-           <form onSubmit={updateDonorProfile} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <select value={bloodGroup} onChange={e => setBloodGroup(e.target.value)} required className="p-3 border rounded-xl">
-                <option value="">Select Blood Group</option>
+        {/* Profile Completion - Minimalist Card */}
+        {showUpdateForm && (
+          <div className="bg-white border-2 border-slate-100 rounded-[2rem] p-8 mb-10 shadow-sm">
+            <h2 className="text-lg font-bold mb-1">One last step</h2>
+            <p className="text-slate-400 text-sm mb-6">Select your details to see matching requests.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <select value={bloodGroup} onChange={e => setBloodGroup(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-500 font-bold transition-all">
+                <option value="">Blood Group</option>
                 {['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'].map(g => <option key={g} value={g}>{g}</option>)}
               </select>
-              <select value={gender} onChange={e => setGender(e.target.value)} required className="p-3 border rounded-xl">
-                <option value="">Select Gender</option>
+              <select value={gender} onChange={e => setGender(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-red-500 font-bold transition-all">
+                <option value="">Gender</option>
                 <option value="male">Male</option>
                 <option value="female">Female</option>
               </select>
-              <button type="submit" className="md:col-span-2 bg-green-600 text-white p-3 rounded-xl font-bold">Update Profile</button>
-           </form>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="text-gray-600 font-medium">Available matching requests:</h3>
-            <button onClick={fetchRequests} className="text-sm text-blue-600 hover:underline">Refresh List</button>
+              <button onClick={() => setShowUpdateForm(false)} className="sm:col-span-2 bg-slate-900 text-white p-4 rounded-2xl font-black hover:bg-red-600 transition-all shadow-lg shadow-slate-100">
+                Start Saving Lives
+              </button>
+            </div>
           </div>
+        )}
 
-          <div className="grid gap-4">
-            {matchingRequests.map((r) => (
-                <div 
-                  key={r._id} 
-                  className="bg-white border-2 border-transparent hover:border-red-300 p-5 rounded-2xl shadow-sm transition-all cursor-pointer relative group"
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h4 className="text-xl font-bold text-gray-800">{r.patientName}</h4>
-                      <p className="text-gray-500 text-sm mt-1">{r.reason}</p>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-red-600 font-black text-2xl">{r.bloodGroup}</span>
-                      <p className="text-xs text-gray-400">Reference: {r.requestId || 'N/A'}</p>
-                    </div>
-                  </div>
+        {/* Controls */}
+        <div className="flex justify-between items-center mb-6 px-2">
+            <h3 className="text-xs font-black uppercase tracking-widest text-slate-300">Live Requests</h3>
+            <button 
+              onClick={fetchRequests} 
+              className={`text-xs font-black text-slate-400 hover:text-red-600 flex items-center gap-2 transition-colors ${isRefreshing ? 'animate-pulse' : ''}`}
+            >
+              {isRefreshing ? 'SYNCING...' : 'REFRESH'}
+            </button>
+        </div>
 
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-50 text-sm text-gray-600">
-                    <div><span className="font-bold">Hospital:</span> {r.location}</div>
-                    <div><span className="font-bold">Date:</span> {formatDate(r.donationDate)}</div>
-                    <div><span className="font-bold">Time:</span> {r.donationTime}</div>
-                  </div>
-
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); AddToQueue(r._id); }}
-                    className="mt-4 w-full bg-red-600 text-white py-3 rounded-xl font-bold opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    Accept & Connect
-                  </button>
+        {/* The Feed */}
+        <div className="space-y-6">
+          {matchingRequests.map((r) => (
+            <div key={r._id} className="group bg-white border border-slate-100 rounded-[2.5rem] p-8 transition-all hover:shadow-2xl hover:shadow-slate-200/50 hover:border-transparent">
+              <div className="flex justify-between items-start mb-8">
+                <div className="space-y-1">
+                  <h3 className="text-2xl font-black text-slate-900 leading-tight group-hover:text-red-600 transition-colors">{r.patientName}</h3>
+                  <p className="text-slate-400 font-bold text-sm uppercase tracking-wider">{r.reason}</p>
                 </div>
-              ))}
-              
-            {matchingRequests.length === 0 && (
-              <div className="text-center py-20 bg-gray-50 rounded-2xl text-gray-400">
-                No matching blood requests found for your group at this time.
+                <div className="w-16 h-16 bg-slate-50 rounded-3xl flex items-center justify-center text-red-600 font-black text-2xl group-hover:bg-red-600 group-hover:text-white transition-all duration-300 shadow-inner">
+                  {r.bloodGroup}
+                </div>
               </div>
-            )}
-          </div>
+
+              <div className="grid grid-cols-2 gap-6 mb-8">
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black text-slate-300 uppercase">Hospital</p>
+                  <p className="text-sm font-bold text-slate-600">{r.location}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black text-slate-300 uppercase">Schedule</p>
+                  <p className="text-sm font-bold text-slate-600">
+                    {new Date(r.donationDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} • {r.donationTime}
+                  </p>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => handleAccept(r._id)}
+                className="w-full bg-slate-50 group-hover:bg-red-600 text-slate-400 group-hover:text-white py-4 rounded-3xl font-black transition-all transform active:scale-[0.98] shadow-sm group-hover:shadow-red-200"
+              >
+                Accept This Request
+              </button>
+            </div>
+          ))}
+
+          {matchingRequests.length === 0 && (
+            <div className="text-center py-32">
+              <div className="w-20 h-20 bg-slate-50 rounded-[2.5rem] flex items-center justify-center mx-auto mb-6 text-slate-200">
+                <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+              </div>
+              <p className="text-slate-400 font-black text-sm uppercase tracking-widest">No Matches Found</p>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 };

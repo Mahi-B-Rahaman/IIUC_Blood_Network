@@ -1,40 +1,58 @@
-import { NavLink, useNavigate } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { NavLink, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 export const Nav = () => {
   const navigate = useNavigate();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-
-  useEffect(() => {
-    const val = localStorage.getItem('IsLoggedIn') === 'true' || !!localStorage.getItem('userId');
-    setIsLoggedIn(val);
-  }, []);
+  const { isLoggedIn, logout } = useAuth();
 
   const handleLogout = () => {
-    localStorage.removeItem('userId');
-    localStorage.removeItem('IsLoggedIn');
-    // remove any other auth keys if present
-    try { localStorage.removeItem('token'); } catch {}
-    setIsLoggedIn(false);
-    navigate('/');
-  }
+    logout();
+    navigate('/login');
+  };
+
+  // Modern NavLink Styling
+  const linkClass = ({ isActive }: { isActive: boolean }) => 
+    `text-sm font-black uppercase tracking-widest transition-all hover:text-red-600 ${
+      isActive ? 'text-red-600' : 'text-slate-400'
+    }`;
 
   return (
-    <div className='bg-red-600 w-full h-16 flex items-center text-white text-2xl font-bold px-6'>
-      <div className='flex items-center gap-4'>
-        <NavLink to="/" className="hover:text-black mr-4">IIUC_Blood.net</NavLink>
-        <NavLink to="/about">AboutUs</NavLink>
-        <NavLink to="/blooddashboard" className="ml-4">DonateBlood</NavLink>
-        <NavLink to="/bloodrequest" className="ml-4">RequestBlood</NavLink>
-      </div>
+    <nav className="fixed top-0 left-0 w-full z-50 bg-white/80 backdrop-blur-md border-b border-slate-100 ">
+      <div className="max-w-5xl mx-auto h-20 flex items-center justify-between px-8">
+        
+        {/* Logo Section */}
+        <div className="flex items-center gap-8">
+          <NavLink to="/" className="text-2xl font-black tracking-tighter text-slate-900 group">
+            IIUC<span className="text-red-600 group-hover:animate-pulse">.</span>Blood
+          </NavLink>
 
-      <div className='ml-auto flex items-center gap-4 text-base'>
-        {!isLoggedIn ? (
-          <NavLink to="/register" className='text-white/90 hover:underline'>Register</NavLink>
-        ) : (
-          <button onClick={handleLogout} className='bg-white text-red-600 px-3 py-1 rounded-md font-medium hover:bg-white/90'>Logout</button>
-        )}
+          {/* Main Links */}
+          <div className="hidden md:flex items-center gap-8 border-l border-slate-100 pl-8">
+            <NavLink to="/about" className={linkClass}>About</NavLink>
+            <NavLink to="/blooddashboard" className={linkClass}>Donate</NavLink>
+            <NavLink to="/bloodrequest" className={linkClass}>Request</NavLink>
+          </div>
+        </div>
+
+        {/* Action Section */}
+        <div className="flex items-center gap-4">
+          {isLoggedIn ? (
+            <button 
+              onClick={handleLogout} 
+              className="bg-slate-900 text-white px-6 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-red-600 transition-all shadow-lg shadow-slate-100 active:scale-95"
+            >
+              Logout
+            </button>
+          ) : (
+            <NavLink 
+              to="/login" 
+              className="bg-red-600 text-white px-6 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-900 transition-all shadow-lg shadow-red-100"
+            >
+              Sign In
+            </NavLink>
+          )}
+        </div>
       </div>
-    </div>
-  )
-}
+    </nav>
+  );
+};

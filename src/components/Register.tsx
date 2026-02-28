@@ -2,12 +2,10 @@ import React, { createContext, useState } from 'react';
 import axios from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
 
-// Backend API base URL (env on Vercel, localhost fallback for dev)
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5000/api';
 export const UserContext = createContext(null);
 
 const Register: React.FC = () => {
-    // step 1: Collect details & Send OTP | step 2: Verify OTP & Register
     const [step, setStep] = useState<1 | 2>(1);
     const [loading, setLoading] = useState(false);
     const [status, setStatus] = useState({ message: '', isError: false });
@@ -33,13 +31,11 @@ const Register: React.FC = () => {
         if (!checked) setFormData({ ...formData, bloodGroup: '', gender: '' });
     };
 
-    // Step 1: Trigger the SMS service
     const handleSendOTP = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
         setStatus({ message: '', isError: false });
 
-        // If donor details are requested, ensure they are provided
         if (showDetails && (!formData.bloodGroup || !formData.gender)) {
             setStatus({ message: 'Please select blood group and gender.', isError: true });
             setLoading(false);
@@ -47,15 +43,12 @@ const Register: React.FC = () => {
         }
 
         try {
-            // Normalize phone: remove spaces/dashes and ensure +88 country code
             let phoneToSend = String(formData.phone).replace(/\s|-/g, '');
             if (!phoneToSend.startsWith('+88')) {
                 if (phoneToSend.startsWith('0')) phoneToSend = '+88' + phoneToSend;
                 else if (phoneToSend.startsWith('88')) phoneToSend = '+' + phoneToSend;
                 else phoneToSend = '+88' + phoneToSend;
             }
-
-            // Update formData so the verification step shows the normalized number
             setFormData({ ...formData, phone: phoneToSend });
 
             const response = await axios.post(`${API_BASE}/send-otp`, { phone: phoneToSend });
@@ -65,7 +58,7 @@ const Register: React.FC = () => {
             }
         } catch (err: any) {
             setStatus({
-                message: err.response?.data?.error || "Failed to send OTP. Check console.",
+                message: err.response?.data?.error || "Failed to send OTP.",
                 isError: true
             });
         } finally {
@@ -73,18 +66,14 @@ const Register: React.FC = () => {
         }
     };
 
-    // Step 2: Final Registration
     const handleFinalRegister = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
-
         try {
-            // Sends all fields including the OTP
             const response = await axios.post(`${API_BASE}/register`, formData);
             if (response.status === 201) {
-                setStatus({ message: "Account created successfully!", isError: false });
-                // Redirect to login page
-                navigate('/');
+                setStatus({ message: "Account created successfully! Please login.", isError: false });
+                setTimeout(() => navigate('/login'), 2000);
             }
         } catch (err: any) {
             setStatus({
@@ -97,73 +86,100 @@ const Register: React.FC = () => {
     };
 
     return (
-        <>
-            <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
-                <div className="max-w-md w-full bg-white shadow-lg rounded-xl p-8">
-                    <h2 className="text-3xl font-extrabold text-center text-red-600 mb-2">IIUC_Blood.net</h2>
-                    <p className="text-center text-gray-500 mb-6">Donor Registration Portal</p>
+        <div className="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 via-white to-red-100 overflow-hidden font-sans">
+            
+            {/* Geometric Background Decorations */}
+            <div className="absolute top-[-5%] right-[-5%] w-80 h-80 bg-rose-200 rounded-full mix-blend-multiply filter blur-3xl opacity-40 animate-pulse"></div>
+            <div className="absolute bottom-[-10%] left-[-5%] w-96 h-96 bg-red-200 rounded-full mix-blend-multiply filter blur-3xl opacity-40"></div>
+
+            <div className="relative w-full max-w-lg px-6 py-12">
+                {/* Header Section */}
+                <div className="text-center mb-8">
+                    <h2 className="text-3xl font-black text-gray-800 tracking-tight">
+                        IIUC <span className="text-red-600 underline decoration-red-200 underline-offset-4">Blood Network</span>
+                    </h2>
+                    <p className="text-gray-500 mt-2 font-medium">Join our life-saving community today</p>
+                </div>
+
+                {/* Registration Card */}
+                <div className="bg-white/80 backdrop-blur-xl border border-white/50 rounded-3xl shadow-2xl p-8 transition-all duration-500">
+                    
+                    {/* Step Indicator */}
+                    <div className="flex items-center justify-center gap-4 mb-8">
+                        <div className={`h-2 w-12 rounded-full transition-all duration-300 ${step === 1 ? 'bg-red-600' : 'bg-gray-200'}`}></div>
+                        <div className={`h-2 w-12 rounded-full transition-all duration-300 ${step === 2 ? 'bg-red-600' : 'bg-gray-200'}`}></div>
+                    </div>
 
                     {status.message && (
-                        <div className={`mb-4 p-3 rounded text-sm font-medium ${status.isError ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                        <div className={`mb-6 p-4 rounded-xl text-sm font-semibold animate-in fade-in zoom-in duration-300 ${status.isError ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-green-50 text-green-600 border border-green-100'}`}>
                             {status.message}
                         </div>
                     )}
 
                     {step === 1 ? (
                         <form onSubmit={handleSendOTP} className="space-y-4">
-                            <input
-                                name="name"
-                                placeholder="Full Name"
-                                onChange={handleChange}
-                                required
-                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
-                            />
-                            <input
-                                name="phone"
-                                placeholder="Phone (e.g., 01XXXXXXXXX)"
-                                onChange={handleChange}
-                                required
-                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
-                            />
+                            <div className="group">
+                                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1 group-focus-within:text-red-500 transition-colors">Full Name</label>
+                                <input
+                                    name="name"
+                                    placeholder="John Doe"
+                                    onChange={handleChange}
+                                    required
+                                    className="w-full px-4 py-3 bg-gray-50/50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-red-400 focus:bg-white outline-none transition-all"
+                                />
+                            </div>
 
-                            <div className="relative">
+                            <div className="group">
+                                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1 group-focus-within:text-red-500 transition-colors">Phone Number</label>
+                                <input
+                                    name="phone"
+                                    placeholder="01XXXXXXXXX"
+                                    onChange={handleChange}
+                                    required
+                                    className="w-full px-4 py-3 bg-gray-50/50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-red-400 focus:bg-white outline-none transition-all"
+                                />
+                            </div>
+
+                            <div className="group relative">
+                                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1 group-focus-within:text-red-500 transition-colors">Password</label>
                                 <input
                                     name="password"
                                     type={showPassword ? "text" : "password"}
-                                    placeholder="Create Password"
+                                    placeholder="••••••••"
                                     onChange={handleChange}
                                     required
-                                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
+                                    className="w-full px-4 py-3 bg-gray-50/50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-red-400 focus:bg-white outline-none transition-all"
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-3 top-2 text-gray-400 hover:text-gray-600 text-sm"
+                                    className="absolute right-4 bottom-3 text-xs font-bold text-red-400 hover:text-red-600 transition-colors"
                                 >
-                                    {showPassword ? "Hide" : "Show"}
+                                    {showPassword ? "HIDE" : "SHOW"}
                                 </button>
                             </div>
 
-                            <div className="flex items-center gap-2">
-                                <input
-                                    id="showDetails"
-                                    type="checkbox"
-                                    checked={showDetails}
-                                    onChange={handleToggleDetails}
-                                    className="w-4 h-4"
-                                />
-                                <label htmlFor="showDetails" className="text-sm text-gray-600">
-                                    Are you a donor?
+                            {/* Donor Details Toggle */}
+                            <div className="py-2">
+                                <label className="relative inline-flex items-center cursor-pointer group">
+                                    <input
+                                        type="checkbox"
+                                        checked={showDetails}
+                                        onChange={handleToggleDetails}
+                                        className="sr-only peer"
+                                    />
+                                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+                                    <span className="ml-3 text-sm font-bold text-gray-500 group-hover:text-gray-700 transition-colors">I am a blood donor</span>
                                 </label>
                             </div>
 
                             {showDetails && (
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-2 gap-4 animate-in slide-in-from-top-2 duration-300">
                                     <select
                                         name="bloodGroup"
                                         onChange={handleChange}
                                         required
-                                        className="w-full px-4 py-2 border rounded-lg outline-none"
+                                        className="w-full px-4 py-3 bg-red-50/50 border border-red-100 rounded-xl focus:ring-2 focus:ring-red-400 outline-none font-semibold text-red-700 transition-all appearance-none cursor-pointer"
                                     >
                                         <option value="">Blood Group</option>
                                         {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(bg => (
@@ -174,7 +190,7 @@ const Register: React.FC = () => {
                                         name="gender"
                                         onChange={handleChange}
                                         required
-                                        className="w-full px-4 py-2 border rounded-lg outline-none"
+                                        className="w-full px-4 py-3 bg-red-50/50 border border-red-100 rounded-xl focus:ring-2 focus:ring-red-400 outline-none font-semibold text-red-700 transition-all appearance-none cursor-pointer"
                                     >
                                         <option value="">Gender</option>
                                         <option value="Male">Male</option>
@@ -186,53 +202,57 @@ const Register: React.FC = () => {
                             <button
                                 type="submit"
                                 disabled={loading}
-                                className="w-full bg-red-600 text-white font-bold py-2 rounded-lg hover:bg-red-700 transition disabled:bg-gray-400"
+                                className="w-full bg-gradient-to-r from-red-600 to-rose-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-red-100 hover:shadow-red-200 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
                             >
-                                {loading ? "Sending..." : "Request OTP"}
+                                {loading ? "Sending OTP..." : "Continue to Verification"}
                             </button>
-                            <p className="text-sm text-gray-500 text-center">
-                                Already have an account?{' '}
-                                <Link to="/" className="text-red-600 font-semibold hover:underline">
-                                    Login
-                                </Link>
-                            </p>
                         </form>
                     ) : (
-                        <form onSubmit={handleFinalRegister} className="space-y-6">
+                        <form onSubmit={handleFinalRegister} className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
                             <div className="text-center">
-                                <p className="text-sm text-gray-600 mb-2">
-                                    Verification code sent to <b>{formData.phone}</b>
+                                <p className="text-sm text-gray-500 mb-4 font-medium">
+                                    A 6-digit code has been sent to<br/>
+                                    <span className="text-red-600 font-bold">{formData.phone}</span>
                                 </p>
                                 <input
                                     name="otp"
-                                    placeholder="Enter 6-digit OTP"
+                                    placeholder="000000"
                                     onChange={handleChange}
                                     maxLength={6}
                                     required
-                                    className="w-full px-4 py-3 border-2 border-red-200 rounded-lg text-center text-2xl tracking-[0.5em] font-bold focus:border-red-500 outline-none"
+                                    className="w-full px-4 py-5 bg-gray-50 border-2 border-red-100 rounded-2xl text-center text-4xl tracking-[0.2em] font-black focus:border-red-500 focus:bg-white outline-none transition-all text-gray-800"
                                 />
                             </div>
 
                             <button
                                 type="submit"
                                 disabled={loading}
-                                className="w-full bg-green-600 text-white font-bold py-2 rounded-lg hover:bg-green-700 transition disabled:bg-gray-400"
+                                className="w-full bg-gradient-to-r from-green-600 to-emerald-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-green-100 hover:shadow-green-200 hover:scale-[1.02] active:scale-[0.98] transition-all"
                             >
-                                {loading ? "Verifying..." : "Complete Registration"}
+                                {loading ? "Verifying..." : "Create My Account"}
                             </button>
 
                             <button
                                 type="button"
                                 onClick={() => setStep(1)}
-                                className="w-full text-sm text-gray-500 hover:text-red-600 transition"
+                                className="w-full text-sm font-bold text-gray-400 hover:text-red-500 transition-colors"
                             >
-                                Back to Edit Information
+                                ← Edit Information
                             </button>
                         </form>
                     )}
+
+                    <div className="mt-8 pt-6 border-t border-gray-50 text-center">
+                        <p className="text-gray-500 text-sm font-medium">
+                            Already have an account?{' '}
+                            <Link to="/" className="text-red-600 font-bold hover:text-red-700 underline-offset-4 hover:underline">
+                                Login Here
+                            </Link>
+                        </p>
+                    </div>
                 </div>
             </div>
-        </>
+        </div>
     );
 };
 
